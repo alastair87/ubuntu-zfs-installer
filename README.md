@@ -1,0 +1,76 @@
+# Ubuntu ZFS Installer
+
+This repository contains a Bash installer for a single-disk Ubuntu root-on-ZFS install, derived from the OpenZFS Ubuntu 22.04 guide and adapted for a fully automated UEFI workflow without zsys.
+
+## Scope
+
+Supported in the current implementation:
+
+- Single disk only
+- UEFI boot only
+- Ubuntu live environment execution
+- Configurable swap partition size
+- Optional LUKS encryption for the root pool
+- No zsys installation or dataset metadata
+
+Explicitly out of scope for now:
+
+- BIOS boot
+- Mirror or raidz topologies
+- Dual boot
+- Hibernation tuning
+- ZFS native encryption mode
+
+## Requirements
+
+- Ubuntu live environment booted in UEFI mode
+- Network access for `apt` and `debootstrap`
+- Target disk exposed under `/dev/disk/by-id`
+- Root shell
+
+## Usage
+
+Example unencrypted install:
+
+```bash
+sudo ./install-ubuntu-zfs.sh \
+  --disk /dev/disk/by-id/ata-example-disk \
+  --hostname zfs-host \
+  --username alice \
+  --swap-size 4G \
+  --ubuntu-codename noble
+```
+
+Example LUKS install:
+
+```bash
+sudo ./install-ubuntu-zfs.sh \
+  --disk /dev/disk/by-id/ata-example-disk \
+  --hostname zfs-host \
+  --username alice \
+  --encryption luks \
+  --swap-size 8G \
+  --ubuntu-codename noble
+```
+
+To review actions without executing them:
+
+```bash
+sudo ./install-ubuntu-zfs.sh ... --dry-run
+```
+
+## Notes
+
+- The installer is destructive and wipes the target disk.
+- The boot pool name is intentionally fixed to `bpool`.
+- The first implementation targets maintainability over maximum configurability.
+- Review `install.log` after a run.
+
+## Layout
+
+- `install-ubuntu-zfs.sh`: top-level orchestration and argument parsing
+- `lib/common.sh`: logging, safety checks, helpers, and cleanup
+- `lib/partition.sh`: partitioning and disk wipe logic
+- `lib/pools.sh`: LUKS, zpools, and dataset creation
+- `lib/chroot.sh`: target system configuration and bootloader setup
+- `examples/config.env.example`: environment-style configuration template
