@@ -48,6 +48,7 @@ init_defaults() {
     UBUNTU_CODENAME="resolute"
     ENCRYPTION_MODE="none"
     SWAP_SIZE="2G"
+    SWAP_ENABLED=1
     BOOT_POOL_SIZE="2G"
     ROOT_POOL_NAME="rpool"
     BOOT_POOL_NAME="bpool"
@@ -98,7 +99,7 @@ Optional options:
   --user-password-hash HASH  Encrypted password hash for the initial user; prompts if omitted
   --ubuntu-codename NAME     Ubuntu release codename for debootstrap (default: resolute)
   --encryption MODE          none or luks (default: none)
-  --swap-size SIZE           Swap partition size, e.g. 2G, 8G (default: 2G)
+  --swap-size SIZE           Swap partition size, e.g. 2G, 8G, or 0 for none (default: 2G)
   --boot-pool-size SIZE      Boot pool partition size (default: 2G)
   --esp-size SIZE            EFI system partition size (default: 512M)
   --root-pool-name NAME      Root pool name (default: rpool)
@@ -267,9 +268,17 @@ load_config_file_if_present() {
 
 finalize_config() {
     PART_EFI="${DISK}-part1"
-    PART_SWAP="${DISK}-part2"
-    PART_BPOOL="${DISK}-part3"
-    PART_RPOOL="${DISK}-part4"
+    if [[ "$SWAP_SIZE" == "0" ]]; then
+        SWAP_ENABLED=0
+        PART_SWAP=""
+        PART_BPOOL="${DISK}-part2"
+        PART_RPOOL="${DISK}-part3"
+    else
+        SWAP_ENABLED=1
+        PART_SWAP="${DISK}-part2"
+        PART_BPOOL="${DISK}-part3"
+        PART_RPOOL="${DISK}-part4"
+    fi
     TARGET_OS_PACKAGES=("${TARGET_BASE_PACKAGES[@]}")
 
     if [[ "$ENCRYPTION_MODE" == "luks" ]]; then
@@ -324,7 +333,7 @@ validate_inputs() {
     require_mapper_name "$LUKS_NAME" "luks-name"
     require_absolute_path "$TARGET_MNT" "target-mnt"
     require_absolute_path "$EFI_MOUNTPOINT" "efi-mountpoint"
-    require_size_string "$SWAP_SIZE" "swap-size"
+    require_swap_size "$SWAP_SIZE" "swap-size"
     require_size_string "$BOOT_POOL_SIZE" "boot-pool-size"
     require_size_string "$ESP_SIZE" "esp-size"
     validate_runtime_flags
@@ -399,7 +408,7 @@ phase_prepare_live_environment() {
 
 phase_partition_disk() {
     wipe_existing_storage "$DISK"
-    create_gpt_layout "$DISK" "$ESP_SIZE" "$SWAP_SIZE" "$BOOT_POOL_SIZE"
+    create_gpt_layout "$DISK" "$ESP_SIZE" "$SWAP_SIZE" "$BOOT_POOL_SIZE" "$SWAP_ENABLED"
     refresh_partition_table "$DISK"
 }
 
@@ -434,6 +443,7 @@ Disk: $DISK
 Root pool: $ROOT_POOL_NAME
 Boot pool: $BOOT_POOL_NAME
 Encryption: $ENCRYPTION_MODE
+Swap: $SWAP_SIZE
 
 If all commands succeeded, review $LOG_FILE before rebooting.
 EOF

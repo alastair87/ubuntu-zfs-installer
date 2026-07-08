@@ -126,7 +126,18 @@ require_disk_by_id() {
 require_size_string() {
     local value=$1
     local name=$2
-    [[ "$value" =~ ^[0-9]+([KMGTP]i?B?|[KMGTP])$ ]] || die "Invalid $name value: $value"
+    [[ "$value" =~ ^[1-9][0-9]*([KMGTP]i?B?|[KMGTP])$ ]] || die "Invalid $name value: $value"
+}
+
+require_swap_size() {
+    local value=$1
+    local name=$2
+
+    if [[ "$value" == "0" ]]; then
+        return
+    fi
+
+    require_size_string "$value" "$name"
 }
 
 ensure_disk_exists() {
@@ -252,6 +263,7 @@ run_in_chroot_cmd() {
         PART_SWAP="$PART_SWAP" \
         PART_BPOOL="$PART_BPOOL" \
         PART_RPOOL="$PART_RPOOL" \
+        SWAP_ENABLED="$SWAP_ENABLED" \
         HOSTNAME_VALUE="$HOSTNAME_VALUE" \
         USERNAME_VALUE="$USERNAME_VALUE" \
         UBUNTU_CODENAME="$UBUNTU_CODENAME" \
@@ -274,6 +286,7 @@ run_in_chroot_cmd_redacted() {
         PART_SWAP="$PART_SWAP" \
         PART_BPOOL="$PART_BPOOL" \
         PART_RPOOL="$PART_RPOOL" \
+        SWAP_ENABLED="$SWAP_ENABLED" \
         HOSTNAME_VALUE="$HOSTNAME_VALUE" \
         USERNAME_VALUE="$USERNAME_VALUE" \
         UBUNTU_CODENAME="$UBUNTU_CODENAME" \

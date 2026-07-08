@@ -48,6 +48,10 @@ write_fstab() {
     write_target_file "etc/fstab" \
         "$PART_EFI $EFI_MOUNTPOINT vfat defaults 0 0\n/boot/efi/grub /boot/grub none defaults,bind 0 0\n"
 
+    if [[ "$SWAP_ENABLED" == "0" ]]; then
+        return
+    fi
+
     if [[ "$ENCRYPTION_MODE" == "none" ]]; then
         append_target_file "etc/fstab" "$PART_SWAP none swap discard 0 0\n"
     else
@@ -56,8 +60,13 @@ write_fstab() {
 }
 
 maybe_write_crypttab() {
-    if [[ "$ENCRYPTION_MODE" == "luks" ]]; then
+    if [[ "$ENCRYPTION_MODE" == "luks" && "$SWAP_ENABLED" == "1" ]]; then
         write_target_file "etc/crypttab" "${LUKS_NAME} ${PART_RPOOL} none luks,discard,initramfs\nswap ${PART_SWAP} /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512\n"
+        return
+    fi
+
+    if [[ "$ENCRYPTION_MODE" == "luks" ]]; then
+        write_target_file "etc/crypttab" "${LUKS_NAME} ${PART_RPOOL} none luks,discard,initramfs\n"
         return
     fi
 
@@ -114,6 +123,12 @@ populate_zfs_list_cache() {
 }
 
 finalize_target_system() {
+    if [[ "$SWAP_ENABLED" == "0" ]]; then
+        log_info "Skipping swap setup because --swap-size=0"
+        cleanup_mounts
+        return
+    fi
+
     if [[ "$ENCRYPTION_MODE" == "none" ]]; then
         run_cmd mkswap -f "$PART_SWAP"
         run_cmd swapon "$PART_SWAP"
