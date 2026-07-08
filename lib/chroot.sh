@@ -14,21 +14,22 @@ configure_target_system() {
     write_fstab
     maybe_write_crypttab
 
-    run_in_chroot "apt update"
-    run_in_chroot "apt install --yes ${TARGET_OS_PACKAGES[*]}"
-    run_in_chroot "locale-gen en_US.UTF-8"
-    run_in_chroot "update-locale LANG=en_US.UTF-8"
-    run_in_chroot "ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime"
-    run_in_chroot "dpkg-reconfigure -f noninteractive tzdata"
-    run_in_chroot "mkdosfs -F 32 -s 1 -n EFI \"$PART_EFI\""
-    run_in_chroot "mkdir -p $EFI_MOUNTPOINT /boot/grub /boot/efi/grub"
-    run_in_chroot "mount $EFI_MOUNTPOINT"
-    run_in_chroot "mount /boot/grub"
-    run_in_chroot "grub-probe /boot"
-    run_in_chroot "update-initramfs -c -k all"
+    run_in_chroot_cmd apt update
+    run_in_chroot_cmd apt install --yes "${TARGET_OS_PACKAGES[@]}"
+    run_in_chroot_cmd locale-gen en_US.UTF-8
+    run_in_chroot_cmd update-locale LANG=en_US.UTF-8
+    run_in_chroot_cmd ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
+    run_in_chroot_cmd dpkg-reconfigure -f noninteractive tzdata
+    run_in_chroot_cmd mkdosfs -F 32 -s 1 -n EFI "$PART_EFI"
+    run_in_chroot_cmd mkdir -p "$EFI_MOUNTPOINT" /boot/grub
+    run_in_chroot_cmd mount "$EFI_MOUNTPOINT"
+    run_in_chroot_cmd mkdir -p "$EFI_MOUNTPOINT/grub"
+    run_in_chroot_cmd mount --bind "$EFI_MOUNTPOINT/grub" /boot/grub
+    run_in_chroot_cmd grub-probe /boot
+    run_in_chroot_cmd update-initramfs -c -k all
     configure_grub_defaults
-    run_in_chroot "update-grub"
-    run_in_chroot "grub-install --target=x86_64-efi --efi-directory=$EFI_MOUNTPOINT --bootloader-id=ubuntu --recheck"
+    run_in_chroot_cmd update-grub
+    run_in_chroot_cmd grub-install --target=x86_64-efi "--efi-directory=$EFI_MOUNTPOINT" --bootloader-id=ubuntu --recheck
 
     create_initial_user
     maybe_enable_tmpfs_tmp
@@ -68,19 +69,29 @@ maybe_write_crypttab() {
 create_initial_user() {
     run_in_chroot "addgroup --system lpadmin || true"
     run_in_chroot "addgroup --system sambashare || true"
-    run_in_chroot "id -u $USERNAME_VALUE >/dev/null 2>&1 || adduser --disabled-password --gecos '' $USERNAME_VALUE"
-    run_in_chroot "usermod -a -G adm,cdrom,dip,lpadmin,plugdev,sambashare,sudo $USERNAME_VALUE"
-    run_in_chroot "chown -R $USERNAME_VALUE:$USERNAME_VALUE /home/$USERNAME_VALUE"
+
+    if (( DRY_RUN )); then
+        run_in_chroot_cmd id -u "$USERNAME_VALUE"
+        run_in_chroot_cmd adduser --disabled-password --gecos "" "$USERNAME_VALUE"
+    elif run_in_chroot_cmd id -u "$USERNAME_VALUE"; then
+        log_info "User already exists in target: $USERNAME_VALUE"
+    else
+        run_in_chroot_cmd adduser --disabled-password --gecos "" "$USERNAME_VALUE"
+    fi
+
+    run_in_chroot_cmd usermod -a -G adm,cdrom,dip,lpadmin,plugdev,sambashare,sudo "$USERNAME_VALUE"
+    run_in_chroot_cmd chown -R "$USERNAME_VALUE:$USERNAME_VALUE" "/home/$USERNAME_VALUE"
 }
 
 maybe_enable_tmpfs_tmp() {
     if (( ENABLE_TMPFS_TMP )); then
-        run_in_chroot "cp /usr/share/systemd/tmp.mount /etc/systemd/system/ && systemctl enable tmp.mount"
+        run_in_chroot "if [[ -f /usr/lib/systemd/system/tmp.mount || -f /lib/systemd/system/tmp.mount ]]; then systemctl enable tmp.mount; elif [[ -f /usr/share/systemd/tmp.mount ]]; then cp /usr/share/systemd/tmp.mount /etc/systemd/system/ && systemctl enable tmp.mount; else echo 'tmp.mount unit not found; skipping /tmp tmpfs enable' >&2; fi"
     fi
 }
 
 populate_zfs_list_cache() {
-    run_in_chroot "mkdir -p /etc/zfs/zfs-list.cache && touch /etc/zfs/zfs-list.cache/$BOOT_POOL_NAME /etc/zfs/zfs-list.cache/$ROOT_POOL_NAME"
+    run_in_chroot_cmd mkdir -p /etc/zfs/zfs-list.cache
+    run_in_chroot_cmd touch "/etc/zfs/zfs-list.cache/$BOOT_POOL_NAME" "/etc/zfs/zfs-list.cache/$ROOT_POOL_NAME"
     run_in_chroot "zed -F & sleep 2; pkill -INT zed || true"
     run_in_chroot "sed -Ei 's|$TARGET_MNT/?|/|g' /etc/zfs/zfs-list.cache/* || true"
 }

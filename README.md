@@ -59,16 +59,36 @@ To review actions without executing them:
 sudo ./install-ubuntu-zfs.sh ... --dry-run
 ```
 
+Dry-run mode prints the commands it would execute, skips destructive confirmation,
+and does not require root, UEFI, network access, or a real block device.
+
+Environment-style config files can be loaded with `--config`. Values from
+explicit CLI flags override values from the config file.
+
+Reset installer state and wipe the target disk before starting over:
+
+```bash
+sudo ./reset-ubuntu-zfs.sh \
+  --disk /dev/disk/by-id/ata-example-disk
+```
+
+The reset utility also supports `--dry-run` and `--start-phase` with these
+phases: `teardown-installer-state`, `wipe-disk`, and `finalize-reset`.
+
 ## Notes
 
 - The installer is destructive and wipes the target disk.
+- The reset script is also destructive and will wipe the selected disk signatures and partition table.
 - The boot pool name is intentionally fixed to `bpool`.
+- Unknown resume phases are rejected before any phase runs.
 - The first implementation targets maintainability over maximum configurability.
 - Review `install.log` after a run.
+- Review `reset.log` after a reset run.
 
 ## Layout
 
 - `install-ubuntu-zfs.sh`: top-level orchestration and argument parsing
+- `reset-ubuntu-zfs.sh`: teardown and disk reset utility for clean reruns
 - `lib/common.sh`: logging, safety checks, helpers, and cleanup
 - `lib/partition.sh`: partitioning and disk wipe logic
 - `lib/pools.sh`: LUKS, zpools, and dataset creation

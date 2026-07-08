@@ -75,6 +75,18 @@ require_command() {
     command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+require_option_value() {
+    local option=$1
+    local value=${2-}
+    [[ -n "$value" && "$value" != --* ]] || die "Missing value for $option"
+}
+
+require_bool() {
+    local value=$1
+    local name=$2
+    [[ "$value" == "0" || "$value" == "1" ]] || die "Invalid $name value, expected 0 or 1: $value"
+}
+
 require_uefi() {
     [[ -d /sys/firmware/efi/efivars ]] || die "UEFI firmware was not detected"
 }
@@ -95,6 +107,7 @@ require_nonempty() {
 require_disk_by_id() {
     local path=$1
     [[ "$path" == /dev/disk/by-id/* ]] || die "Disk must be specified with /dev/disk/by-id/*"
+    [[ "$path" =~ ^/dev/disk/by-id/[A-Za-z0-9._:+@=-]+$ ]] || die "Disk path contains unsupported characters: $path"
 }
 
 require_size_string() {
@@ -110,9 +123,13 @@ ensure_disk_exists() {
 
 ensure_disk_not_mounted() {
     local path=$1
-    if findmnt --source "$path" >/dev/null 2>&1; then
-        die "Disk is currently mounted: $path"
-    fi
+    local node
+
+    while IFS= read -r node; do
+        if findmnt --source "$node" >/dev/null 2>&1; then
+            die "Disk or child partition is currently mounted: $node"
+        fi
+    done < <(lsblk -nrpo NAME "$path")
 }
 
 ensure_directory_empty_or_absent() {
@@ -123,6 +140,59 @@ ensure_directory_empty_or_absent() {
     if find "$path" -mindepth 1 -maxdepth 1 | read -r _; then
         die "Target mountpoint must be empty before running: $path"
     fi
+}
+
+require_hostname() {
+    local value=$1
+    [[ "$value" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] || die "Invalid hostname: $value"
+}
+
+require_username() {
+    local value=$1
+    [[ "$value" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "Invalid username: $value"
+}
+
+require_codename() {
+    local value=$1
+    [[ "$value" =~ ^[a-z][a-z0-9-]*$ ]] || die "Invalid Ubuntu codename: $value"
+}
+
+require_zpool_name() {
+    local value=$1
+    local name=$2
+    [[ "$value" =~ ^[A-Za-z][A-Za-z0-9_-]*$ ]] || die "Invalid $name value: $value"
+    case "$value" in
+        mirror|raidz|raidz[0-9]|draid|spare|log|cache)
+            die "Invalid reserved $name value: $value"
+            ;;
+    esac
+}
+
+require_mapper_name() {
+    local value=$1
+    local name=$2
+    [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_.+-]*$ ]] || die "Invalid $name value: $value"
+}
+
+require_absolute_path() {
+    local value=$1
+    local name=$2
+    [[ "$value" =~ ^/[A-Za-z0-9._+/@:-]*$ ]] || die "Invalid $name path: $value"
+}
+
+require_phase() {
+    local value=$1
+    shift
+    local phase
+
+    [[ -n "$value" ]] || return 0
+    for phase in "$@"; do
+        if [[ "$value" == "$phase" ]]; then
+            return
+        fi
+    done
+
+    die "Unknown start phase: $value"
 }
 
 write_target_file() {
@@ -153,6 +223,10 @@ append_target_file() {
 
 run_in_chroot() {
     local command=$1
+    run_in_chroot_cmd bash -lc "$command"
+}
+
+run_in_chroot_cmd() {
     run_cmd chroot "$TARGET_MNT" /usr/bin/env \
         DEBIAN_FRONTEND=noninteractive \
         DISK="$DISK" \
@@ -167,7 +241,7 @@ run_in_chroot() {
         BOOT_POOL_NAME="$BOOT_POOL_NAME" \
         ENCRYPTION_MODE="$ENCRYPTION_MODE" \
         LUKS_NAME="$LUKS_NAME" \
-        bash -lc "$command"
+        "$@"
 }
 
 get_partition_uuid() {

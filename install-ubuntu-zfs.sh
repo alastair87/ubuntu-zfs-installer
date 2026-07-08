@@ -17,8 +17,10 @@ trap on_error ERR
 
 main() {
     init_defaults
-    parse_args "$@"
+    parse_config_arg "$@"
     load_config_file_if_present
+    parse_args "$@"
+    validate_runtime_flags
     finalize_config
     install_traps
 
@@ -105,7 +107,7 @@ Optional options:
   --disable-tmpfs-tmp        Do not enable tmp.mount for /tmp
   --dry-run                  Print commands without executing them
   --verbose                  Enable shell tracing during command execution
-  --config FILE              Load environment-style config file before final validation
+  --config FILE              Load environment-style config file; CLI flags override it
   --start-phase NAME         Resume from a named phase
   --force                    Skip interactive destructive confirmation
   --help                     Show this message
@@ -121,50 +123,83 @@ Phases:
 EOF
 }
 
+parse_config_arg() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --config)
+                require_option_value "$1" "${2-}"
+                CONFIG_FILE=$2
+                shift 2
+                ;;
+            --help)
+                usage
+                exit 0
+                ;;
+            --)
+                break
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+}
+
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --disk)
+                require_option_value "$1" "${2-}"
                 DISK=$2
                 shift 2
                 ;;
             --hostname)
+                require_option_value "$1" "${2-}"
                 HOSTNAME_VALUE=$2
                 shift 2
                 ;;
             --username)
+                require_option_value "$1" "${2-}"
                 USERNAME_VALUE=$2
                 shift 2
                 ;;
             --ubuntu-codename)
+                require_option_value "$1" "${2-}"
                 UBUNTU_CODENAME=$2
                 shift 2
                 ;;
             --encryption)
+                require_option_value "$1" "${2-}"
                 ENCRYPTION_MODE=$2
                 shift 2
                 ;;
             --swap-size)
+                require_option_value "$1" "${2-}"
                 SWAP_SIZE=$2
                 shift 2
                 ;;
             --boot-pool-size)
+                require_option_value "$1" "${2-}"
                 BOOT_POOL_SIZE=$2
                 shift 2
                 ;;
             --esp-size)
+                require_option_value "$1" "${2-}"
                 ESP_SIZE=$2
                 shift 2
                 ;;
             --root-pool-name)
+                require_option_value "$1" "${2-}"
                 ROOT_POOL_NAME=$2
                 shift 2
                 ;;
             --boot-pool-name)
+                require_option_value "$1" "${2-}"
                 BOOT_POOL_NAME=$2
                 shift 2
                 ;;
             --luks-name)
+                require_option_value "$1" "${2-}"
                 LUKS_NAME=$2
                 shift 2
                 ;;
@@ -189,10 +224,12 @@ parse_args() {
                 shift
                 ;;
             --config)
+                require_option_value "$1" "${2-}"
                 CONFIG_FILE=$2
                 shift 2
                 ;;
             --start-phase)
+                require_option_value "$1" "${2-}"
                 START_PHASE=$2
                 shift 2
                 ;;
@@ -233,20 +270,35 @@ finalize_config() {
         LIVE_PACKAGES+=(cryptsetup)
     fi
 
-    if (( ENABLE_SSH )); then
+    if [[ "$ENABLE_SSH" == "1" ]]; then
         TARGET_OS_PACKAGES+=(openssh-server)
     fi
 
-    if (( ENABLE_DESKTOP )); then
+    if [[ "$ENABLE_DESKTOP" == "1" ]]; then
         TARGET_OS_PACKAGES+=(ubuntu-desktop)
     else
         TARGET_OS_PACKAGES+=(ubuntu-standard)
     fi
 }
 
+validate_runtime_flags() {
+    require_bool "$DRY_RUN" "dry-run"
+    require_bool "$VERBOSE" "verbose"
+    require_bool "$ENABLE_SSH" "enable-ssh"
+    require_bool "$ENABLE_DESKTOP" "enable-desktop"
+    require_bool "$ENABLE_TMPFS_TMP" "enable-tmpfs-tmp"
+    require_bool "$FORCE" "force"
+}
+
 validate_environment() {
+    if (( DRY_RUN )); then
+        return
+    fi
+
     require_root
     require_command apt
+    require_command findmnt
+    require_command lsblk
     require_uefi
     require_network
 }
@@ -256,9 +308,26 @@ validate_inputs() {
     require_nonempty "$HOSTNAME_VALUE" "hostname"
     require_nonempty "$USERNAME_VALUE" "username"
     require_disk_by_id "$DISK"
+    require_hostname "$HOSTNAME_VALUE"
+    require_username "$USERNAME_VALUE"
+    require_codename "$UBUNTU_CODENAME"
+    require_zpool_name "$ROOT_POOL_NAME" "root-pool-name"
+    require_zpool_name "$BOOT_POOL_NAME" "boot-pool-name"
+    require_mapper_name "$LUKS_NAME" "luks-name"
+    require_absolute_path "$TARGET_MNT" "target-mnt"
+    require_absolute_path "$EFI_MOUNTPOINT" "efi-mountpoint"
     require_size_string "$SWAP_SIZE" "swap-size"
     require_size_string "$BOOT_POOL_SIZE" "boot-pool-size"
     require_size_string "$ESP_SIZE" "esp-size"
+    validate_runtime_flags
+    require_phase "$START_PHASE" \
+        prepare-live-environment \
+        partition-disk \
+        create-pools \
+        create-datasets \
+        bootstrap-system \
+        configure-target-system \
+        finalize-install
 
     case "$ENCRYPTION_MODE" in
         none|luks)
@@ -272,12 +341,14 @@ validate_inputs() {
         die "Boot pool name must remain bpool for GRUB compatibility in this installer"
     fi
 
-    ensure_disk_exists "$DISK"
-    ensure_disk_not_mounted "$DISK"
-    if [[ -z "$START_PHASE" ]]; then
-        ensure_directory_empty_or_absent "$TARGET_MNT"
-    else
-        log_warn "Skipping empty mountpoint check because resume mode is enabled"
+    if (( ! DRY_RUN )); then
+        ensure_disk_exists "$DISK"
+        ensure_disk_not_mounted "$DISK"
+        if [[ -z "$START_PHASE" ]]; then
+            ensure_directory_empty_or_absent "$TARGET_MNT"
+        else
+            log_warn "Skipping empty mountpoint check because resume mode is enabled"
+        fi
     fi
 }
 
@@ -294,6 +365,11 @@ This will irreversibly destroy data on:
   username: $USERNAME_VALUE
 EOF
     )
+
+    if (( DRY_RUN )); then
+        log_info "Skipping destructive confirmation because --dry-run was used"
+        return
+    fi
 
     if (( FORCE )); then
         log_warn "Skipping confirmation because --force was used"

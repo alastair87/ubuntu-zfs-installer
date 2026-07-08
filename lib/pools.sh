@@ -29,6 +29,8 @@ create_root_pool() {
     if [[ "$ENCRYPTION_MODE" == "luks" ]]; then
         log_info "Creating LUKS container on $PART_RPOOL"
         run_cmd cryptsetup luksFormat \
+            --batch-mode \
+            --verify-passphrase \
             --type "$LUKS_TYPE" \
             --cipher "$LUKS_CIPHER" \
             --key-size "$LUKS_KEY_SIZE" \
