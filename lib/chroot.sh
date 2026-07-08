@@ -26,6 +26,7 @@ configure_target_system() {
     run_in_chroot_cmd mkdir -p "$EFI_MOUNTPOINT/grub"
     run_in_chroot_cmd mount --bind "$EFI_MOUNTPOINT/grub" /boot/grub
     run_in_chroot_cmd grub-probe /boot
+    populate_zfs_list_cache
     run_in_chroot_cmd update-initramfs -c -k all
     configure_grub_defaults
     run_in_chroot_cmd update-grub
@@ -33,7 +34,6 @@ configure_target_system() {
 
     create_initial_user
     maybe_enable_tmpfs_tmp
-    populate_zfs_list_cache
 }
 
 configure_grub_defaults() {
@@ -81,6 +81,23 @@ create_initial_user() {
 
     run_in_chroot_cmd usermod -a -G adm,cdrom,dip,lpadmin,plugdev,sambashare,sudo "$USERNAME_VALUE"
     run_in_chroot_cmd chown -R "$USERNAME_VALUE:$USERNAME_VALUE" "/home/$USERNAME_VALUE"
+    set_initial_user_password
+}
+
+set_initial_user_password() {
+    if [[ -n "$USER_PASSWORD_HASH" ]]; then
+        run_in_chroot_cmd_redacted "usermod --password [REDACTED] $USERNAME_VALUE" \
+            usermod --password "$USER_PASSWORD_HASH" "$USERNAME_VALUE"
+        return
+    fi
+
+    if (( DRY_RUN )); then
+        run_in_chroot_cmd passwd "$USERNAME_VALUE"
+        return
+    fi
+
+    log_info "Set password for initial user: $USERNAME_VALUE"
+    run_in_chroot_cmd passwd "$USERNAME_VALUE"
 }
 
 maybe_enable_tmpfs_tmp() {

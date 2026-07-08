@@ -49,6 +49,19 @@ run_cmd() {
     "$@" 2>&1 | tee -a "$LOG_FILE"
 }
 
+run_cmd_redacted() {
+    local display=$1
+    shift
+
+    if (( DRY_RUN )); then
+        printf '[DRY-RUN] %s\n' "$display" | tee -a "$LOG_FILE"
+        return 0
+    fi
+
+    printf '[RUN] %s\n' "$display" | tee -a "$LOG_FILE"
+    "$@" 2>&1 | tee -a "$LOG_FILE"
+}
+
 run_phase() {
     local name=$1
     shift
@@ -152,6 +165,11 @@ require_username() {
     [[ "$value" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "Invalid username: $value"
 }
 
+require_password_hash() {
+    local value=$1
+    [[ -z "$value" || "$value" =~ ^[!*\$A-Za-z0-9./+=,-]+$ ]] || die "Invalid user-password-hash value"
+}
+
 require_codename() {
     local value=$1
     [[ "$value" =~ ^[a-z][a-z0-9-]*$ ]] || die "Invalid Ubuntu codename: $value"
@@ -228,6 +246,28 @@ run_in_chroot() {
 
 run_in_chroot_cmd() {
     run_cmd chroot "$TARGET_MNT" /usr/bin/env \
+        DEBIAN_FRONTEND=noninteractive \
+        DISK="$DISK" \
+        PART_EFI="$PART_EFI" \
+        PART_SWAP="$PART_SWAP" \
+        PART_BPOOL="$PART_BPOOL" \
+        PART_RPOOL="$PART_RPOOL" \
+        HOSTNAME_VALUE="$HOSTNAME_VALUE" \
+        USERNAME_VALUE="$USERNAME_VALUE" \
+        UBUNTU_CODENAME="$UBUNTU_CODENAME" \
+        ROOT_POOL_NAME="$ROOT_POOL_NAME" \
+        BOOT_POOL_NAME="$BOOT_POOL_NAME" \
+        ENCRYPTION_MODE="$ENCRYPTION_MODE" \
+        LUKS_NAME="$LUKS_NAME" \
+        "$@"
+}
+
+run_in_chroot_cmd_redacted() {
+    local display=$1
+    shift
+
+    run_cmd_redacted "chroot $TARGET_MNT $display" \
+        chroot "$TARGET_MNT" /usr/bin/env \
         DEBIAN_FRONTEND=noninteractive \
         DISK="$DISK" \
         PART_EFI="$PART_EFI" \

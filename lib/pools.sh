@@ -45,6 +45,7 @@ create_root_pool() {
         -f \
         -o ashift=12 \
         -o autotrim=on \
+        -o cachefile=/etc/zfs/zpool.cache \
         -O acltype=posixacl \
         -O xattr=sa \
         -O dnodesize=auto \
@@ -65,6 +66,9 @@ create_dataset_layout() {
 
     run_cmd zfs create -o canmount=off -o mountpoint=none "$BOOT_POOL_NAME/BOOT"
     run_cmd zfs create -o mountpoint=/boot "$BOOT_POOL_NAME/BOOT/ubuntu"
+
+    run_cmd zpool set bootfs="$ROOT_POOL_NAME/ROOT/ubuntu" "$ROOT_POOL_NAME"
+    run_cmd zpool set bootfs="$BOOT_POOL_NAME/BOOT/ubuntu" "$BOOT_POOL_NAME"
 
     run_cmd zfs create -o mountpoint=/root "$ROOT_POOL_NAME/root"
     run_cmd zfs create -o canmount=off -o mountpoint=/home "$ROOT_POOL_NAME/home"

@@ -44,6 +44,7 @@ init_defaults() {
     DISK=""
     HOSTNAME_VALUE=""
     USERNAME_VALUE=""
+    USER_PASSWORD_HASH=""
     UBUNTU_CODENAME="resolute"
     ENCRYPTION_MODE="none"
     SWAP_SIZE="2G"
@@ -94,6 +95,7 @@ Required options:
   --username NAME            Initial non-root user to create
 
 Optional options:
+  --user-password-hash HASH  Encrypted password hash for the initial user; prompts if omitted
   --ubuntu-codename NAME     Ubuntu release codename for debootstrap (default: resolute)
   --encryption MODE          none or luks (default: none)
   --swap-size SIZE           Swap partition size, e.g. 2G, 8G (default: 2G)
@@ -161,6 +163,11 @@ parse_args() {
             --username)
                 require_option_value "$1" "${2-}"
                 USERNAME_VALUE=$2
+                shift 2
+                ;;
+            --user-password-hash)
+                require_option_value "$1" "${2-}"
+                USER_PASSWORD_HASH=$2
                 shift 2
                 ;;
             --ubuntu-codename)
@@ -310,6 +317,7 @@ validate_inputs() {
     require_disk_by_id "$DISK"
     require_hostname "$HOSTNAME_VALUE"
     require_username "$USERNAME_VALUE"
+    require_password_hash "$USER_PASSWORD_HASH"
     require_codename "$UBUNTU_CODENAME"
     require_zpool_name "$ROOT_POOL_NAME" "root-pool-name"
     require_zpool_name "$BOOT_POOL_NAME" "boot-pool-name"
