@@ -38,7 +38,7 @@ sudo ./install-ubuntu-zfs.sh \
   --hostname zfs-host \
   --username alice \
   --swap-size 4G \
-  --ubuntu-codename noble
+  --ubuntu-codename resolute
 ```
 
 Example LUKS install:
@@ -50,7 +50,7 @@ sudo ./install-ubuntu-zfs.sh \
   --username alice \
   --encryption luks \
   --swap-size 8G \
-  --ubuntu-codename noble
+  --ubuntu-codename resolute
 ```
 
 To review actions without executing them:

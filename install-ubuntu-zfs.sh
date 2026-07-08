@@ -44,7 +44,7 @@ init_defaults() {
     DISK=""
     HOSTNAME_VALUE=""
     USERNAME_VALUE=""
-    UBUNTU_CODENAME="noble"
+    UBUNTU_CODENAME="resolute"
     ENCRYPTION_MODE="none"
     SWAP_SIZE="2G"
     BOOT_POOL_SIZE="2G"
@@ -94,7 +94,7 @@ Required options:
   --username NAME            Initial non-root user to create
 
 Optional options:
-  --ubuntu-codename NAME     Ubuntu release codename for debootstrap (default: noble)
+  --ubuntu-codename NAME     Ubuntu release codename for debootstrap (default: resolute)
   --encryption MODE          none or luks (default: none)
   --swap-size SIZE           Swap partition size, e.g. 2G, 8G (default: 2G)
   --boot-pool-size SIZE      Boot pool partition size (default: 2G)
