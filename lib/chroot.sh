@@ -5,7 +5,8 @@ configure_target_system() {
 
     write_target_file "etc/hostname" "$HOSTNAME_VALUE\n"
     write_target_file "etc/hosts" "127.0.0.1 localhost\n127.0.1.1 $HOSTNAME_VALUE\n"
-    write_target_file "etc/apt/sources.list" "deb http://archive.ubuntu.com/ubuntu $UBUNTU_CODENAME main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu $UBUNTU_CODENAME-updates main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu $UBUNTU_CODENAME-backports main restricted universe multiverse\ndeb http://security.ubuntu.com/ubuntu $UBUNTU_CODENAME-security main restricted universe multiverse\n"
+    write_apt_sources
+    write_network_config
 
     run_cmd mount --make-private --rbind /dev "$TARGET_MNT/dev"
     run_cmd mount --make-private --rbind /proc "$TARGET_MNT/proc"
@@ -34,6 +35,17 @@ configure_target_system() {
 
     create_initial_user
     maybe_enable_tmpfs_tmp
+}
+
+write_apt_sources() {
+    write_target_file "etc/apt/sources.list" ""
+    write_target_file "etc/apt/sources.list.d/ubuntu.sources" \
+        "Types: deb\nURIs: http://archive.ubuntu.com/ubuntu\nSuites: $UBUNTU_CODENAME $UBUNTU_CODENAME-updates $UBUNTU_CODENAME-backports\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n\nTypes: deb\nURIs: http://security.ubuntu.com/ubuntu\nSuites: $UBUNTU_CODENAME-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n"
+}
+
+write_network_config() {
+    write_target_file "etc/netplan/01-dhcp.yaml" \
+        "network:\n  version: 2\n  ethernets:\n    default:\n      match:\n        name: \"e*\"\n      dhcp4: true\n      dhcp6: true\n"
 }
 
 configure_grub_defaults() {

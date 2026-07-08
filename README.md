@@ -9,6 +9,8 @@ Supported in the current implementation:
 - Single disk only
 - UEFI boot only
 - Ubuntu live environment execution
+- DHCP networking by default through netplan
+- Deb822-style Ubuntu apt sources
 - Configurable swap partition size
 - Swap can be disabled with `--swap-size 0`
 - Optional LUKS encryption for the root pool

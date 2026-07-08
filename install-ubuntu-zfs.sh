@@ -76,6 +76,7 @@ init_defaults() {
         keyboard-configuration
         console-setup
         sudo
+        netplan.io
         zfs-initramfs
         linux-image-generic
         grub-efi-amd64
